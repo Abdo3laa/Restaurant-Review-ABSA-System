@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ABSA — Restaurant Review Analyser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,500&family=Lato:wght@300;400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+  /* ── tokens ── */
+  :root {
+    --bg:        #f5f3ef;
+    --surface:   #ffffff;
+    --card:      #ffffff;
+    --border:    #e0dbd2;
+    --accent:    #b5722a;
+    --accent2:   #d4893a;
+    --green:     #1e8a5e;
+    --red:       #c94040;
+    --blue:      #3a6fb5;
+    --text:      #1e1a14;
+    --muted:     #7a7060;
+    --radius:    12px;
+    --radius-lg: 20px;
+  }
+
+  /* ── reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Lato', sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── subtle texture ── */
+  body::before {
+    content: "";
+    position: fixed; inset: 0; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  /* ── page ── */
+  .page { position: relative; z-index: 1; max-width: 1150px; margin: 0 auto; padding: 0 28px 100px; }
+
+  /* ── header ── */
+  header {
+    padding: 56px 0 44px;
+    display: flex; align-items: flex-end; gap: 20px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 52px;
+  }
+  .logo-icon {
+    width: 54px; height: 54px;
+    background: var(--accent);
+    border-radius: 12px;
+    display: grid; place-items: center;
+    font-size: 26px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(181,114,42,.25);
+  }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  header h1 span { color: var(--accent); font-style: italic; }
+  header p {
+    font-size: 1rem;
+    color: var(--muted);
+    margin-top: 8px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    font-weight: 300;
+  }
+
+  /* ── tabs ── */
+  .tabs {
+    display: flex; gap: 4px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px;
+    width: fit-content;
+    margin-bottom: 36px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  .tab-btn {
+    padding: 11px 28px;
+    border: none; background: transparent;
+    color: var(--muted);
+    font-family: 'Lato', sans-serif;
+    font-size: 1rem; font-weight: 700;
+    cursor: pointer; border-radius: 8px;
+    transition: all .2s;
+    letter-spacing: .03em;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(181,114,42,.3);
+  }
+  .tab-btn:hover:not(.active) { color: var(--text); background: var(--bg); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeUp .3s ease; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+  /* ── card ── */
+  .card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.05);
+  }
+  .card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    color: var(--accent);
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700;
+  }
+  .card-title::before {
+    content: "";
+    display: block; width: 4px; height: 20px;
+    background: var(--accent); border-radius: 2px;
+  }
+
+  /* ── form elements ── */
+  label {
+    font-size: .92rem;
+    color: var(--muted);
+    display: block; margin-bottom: 7px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  textarea, input[type="text"], select {
+    width: 100%;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    color: var(--text);
+    font-family: 'Lato', sans-serif;
+    font-size: 1rem;
+    border-radius: var(--radius);
+    padding: 13px 16px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  textarea:focus, input[type="text"]:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(181,114,42,.12);
+  }
+  textarea { resize: vertical; min-height: 130px; line-height: 1.65; }
+  select option { background: var(--surface); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
+  .form-group { margin-bottom: 20px; }
+
+  /* ── file drop ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 46px 28px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+    background: var(--bg);
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(181,114,42,.04);
+  }
+  .drop-zone input[type="file"] { position: absolute; inset:0; opacity:0; cursor:pointer; width:100%; }
+  .drop-icon { font-size: 2.6rem; margin-bottom: 12px; }
+  .drop-text { font-size: 1rem; color: var(--muted); }
+  .drop-text strong { color: var(--accent); font-weight: 700; }
+  .file-name { margin-top: 12px; font-family: 'DM Mono', monospace; font-size: .88rem; color: var(--green); }
+
+  /* ── toggle switch ── */
+  .toggle-row { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+  .toggle-label { font-size: .95rem; color: var(--muted); }
+  .switch { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
+  .switch input { opacity: 0; width:0; height:0; }
+  .slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: var(--border); border-radius: 26px;
+    transition: .2s;
+  }
+  .slider::before {
+    content: ""; position: absolute;
+    width: 20px; height: 20px; left: 3px; bottom: 3px;
+    background: #fff; border-radius: 50%;
+    transition: .2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(20px); }
+
+  /* ── button ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 13px 28px;
+    border-radius: var(--radius);
+    border: none; cursor: pointer;
+    font-family: 'Lato', sans-serif;
+    font-size: 1rem; font-weight: 700;
+    transition: all .18s;
+    letter-spacing: .02em;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(181,114,42,.3);
+  }
+  .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 5px 16px rgba(181,114,42,.35); }
+  .btn-ghost {
+    background: transparent;
+    border: 1.5px solid var(--border);
+    color: var(--muted);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* ── loader ── */
+  .loader { display: none; align-items: center; gap: 12px; color: var(--muted); font-size: .95rem; margin-top: 18px; }
+  .loader.show { display: flex; }
+  .spinner { width: 20px; height: 20px; border: 2.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── results ── */
+  #text-results, #file-results { margin-top: 32px; display: none; }
+  #text-results.show, #file-results.show { display: block; animation: fadeUp .3s ease; }
+
+  /* ── aspect pill list ── */
+  .aspect-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .asp-pill {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: .9rem; font-weight: 700;
+    font-family: 'DM Mono', monospace;
+    border: 1.5px solid;
+    animation: fadeUp .3s ease both;
+  }
+  .asp-pill.positive { background: rgba(30,138,94,.08); border-color: rgba(30,138,94,.3); color: var(--green); }
+  .asp-pill.negative { background: rgba(201,64,64,.08); border-color: rgba(201,64,64,.3); color: var(--red); }
+  .asp-pill.neutral  { background: rgba(58,111,181,.08); border-color: rgba(58,111,181,.3); color: var(--blue); }
+  .pill-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+  /* ── summary stats ── */
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat-box {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  }
+  .stat-num { font-family: 'Playfair Display', serif; font-size: 2.2rem; font-weight: 700; color: var(--accent); }
+  .stat-lbl { font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 5px; font-weight: 700; }
+
+  /* ── table ── */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1.5px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  thead th {
+    background: var(--bg);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-size: .8rem;
+    font-weight: 700;
+    padding: 14px 18px;
+    text-align: left;
+    border-bottom: 1.5px solid var(--border);
+    position: sticky; top: 0;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(181,114,42,.04); }
+  tbody td { padding: 13px 18px; vertical-align: top; line-height: 1.55; }
+  td.sentence-cell { max-width: 430px; color: var(--muted); font-size: .9rem; }
+  td.aspect-cell { font-family: 'DM Mono', monospace; color: var(--text); font-size: .9rem; }
+
+  .badge {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    font-size: .82rem; font-weight: 700; letter-spacing: .03em;
+  }
+  .badge.positive { background: rgba(30,138,94,.12); color: var(--green); }
+  .badge.negative { background: rgba(201,64,64,.12); color: var(--red); }
+  .badge.neutral  { background: rgba(58,111,181,.12); color: var(--blue); }
+
+  /* ── chart ── */
+  .chart-box {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.05);
+  }
+  .chart-box h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    color: var(--accent);
+    margin-bottom: 20px;
+    font-weight: 700;
+  }
+
+  /* ── chart filter bar ── */
+  .chart-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-pill {
+    padding: 6px 16px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    font-size: .88rem; font-weight: 700;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: 'Lato', sans-serif;
+  }
+  .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .filter-pill.all.active   { background: var(--accent); }
+  .filter-pill.positive.active { background: var(--green); border-color: var(--green); }
+  .filter-pill.negative.active { background: var(--red); border-color: var(--red); }
+  .filter-pill.neutral.active  { background: var(--blue); border-color: var(--blue); }
+
+  /* ── actions bar ── */
+  .actions-bar { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+
+  /* ── scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  /* ── error ── */
+  .error-msg {
+    background: rgba(201,64,64,.08);
+    border: 1.5px solid rgba(201,64,64,.3);
+    color: var(--red);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    font-size: .95rem;
+    margin-top: 18px;
+    display: none;
+  }
+  .error-msg.show { display: block; }
+
+  /* ── responsive ── */
+  @media (max-width: 640px) {
+    .form-row { grid-template-columns: 1fr; }
+    header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .chart-header { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-icon">🍽️</div>
+    <div>
+      <h1>Restaurant Review <span>ABSA</span></h1>
+      <p>Aspect-Based Sentiment Analysis System</p>
+    </div>
+  </header>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="text">Single Review</button>
+    <button class="tab-btn" data-tab="file">Batch File</button>
+  </div>
+
+  <!-- ══ TAB: Single Text ══════════════════════════════════════════════════ -->
+  <div class="tab-panel active" id="tab-text">
+    <div class="card">
+      <div class="card-title">Analyse a Review</div>
+      <div class="form-group">
+        <label>Review Text</label>
+        <textarea id="review-input" placeholder="e.g. The pizza was incredible but the service was really slow and the music was way too loud…"></textarea>
+      </div>
+      <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-analyze-text">
+          <span>Analyse</span> <span>→</span>
+        </button>
+        <button class="btn btn-ghost" id="btn-clear-text">Clear</button>
+      </div>
+      <div class="loader" id="loader-text"><div class="spinner"></div> Extracting aspects…</div>
+      <div class="error-msg" id="err-text"></div>
+    </div>
+
+    <!-- results -->
+    <div id="text-results">
+      <div class="card">
+        <div class="card-title">Extracted Aspects</div>
+        <div class="aspect-list" id="aspect-pills"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: File Upload ══════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-file">
+    <div class="card">
+      <div class="card-title">Upload Review File</div>
+
+      <!-- drop zone -->
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept=".csv,.txt" />
+        <div class="drop-icon">📂</div>
+        <div class="drop-text">Drop a <strong>.csv</strong> or <strong>.txt</strong> file here, or click to browse</div>
+        <div class="file-name" id="file-name-display"></div>
+      </div>
+
+      <!-- csv options (hidden for txt) -->
+      <div id="csv-options" style="margin-top:24px; display:none;">
+        <div class="card-title" style="font-size:1rem; margin-bottom:16px;">CSV Options</div>
+
+        <div class="toggle-row">
+          <label class="switch">
+            <input type="checkbox" id="has-header" checked />
+            <span class="slider"></span>
+          </label>
+          <span class="toggle-label">File has a header row</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Review Column</label>
+            <input type="text" id="col-input" placeholder="Column name or index (default: 0)" />
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Preview (first 3 rows)</label>
+            <div id="csv-preview" style="font-family:'DM Mono',monospace; font-size:.85rem; color:var(--muted); background:var(--bg); border:1.5px solid var(--border); border-radius:8px; padding:12px; min-height:42px; max-height:84px; overflow:auto;">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px; display:flex; gap:14px; flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-analyze-file">
+          <span>Run Batch Analysis</span> <span>→</span>
+        </button>
+        <button class="btn btn-ghost" id="btn-clear-file">Clear</button>
+      </div>
+      <div class="loader" id="loader-file"><div class="spinner"></div> Running ABSA on all rows…</div>
+      <div class="error-msg" id="err-file"></div>
+    </div>
+
+    <!-- file results -->
+    <div id="file-results">
+
+      <!-- stats -->
+      <div class="stats-row" id="stats-row"></div>
+
+      <!-- actions -->
+      <div class="actions-bar">
+        <button class="btn btn-ghost" id="btn-download">⬇ Download CSV</button>
+      </div>
+
+      <!-- CHART 1: Aspect by Sentiment (grouped bar, sorted desc by total) -->
+      <div class="chart-box">
+        <h3>Aspect by Sentiment</h3>
+        <div id="chart-sentiment" style="width:100%;height:440px;"></div>
+      </div>
+
+      <!-- CHART 2: Sentiment Distribution (pie/donut) -->
+      <div class="chart-box">
+        <h3>Sentiment Distribution</h3>
+        <div id="chart-sentiment-dist" style="width:100%;height:360px;"></div>
+      </div>
+
+      <!-- CHART 3: Top 10 Repeated Aspects (with sentiment filter, sorted desc) -->
+      <div class="chart-box">
+        <div class="chart-header">
+          <h3 style="margin-bottom:0;">Top 10 Most Repeated Aspects</h3>
+          <div class="filter-pills" id="top10-filters">
+            <button class="filter-pill all active" data-filter="all">All</button>
+            <button class="filter-pill positive" data-filter="positive">Positive</button>
+            <button class="filter-pill negative" data-filter="negative">Negative</button>
+            <button class="filter-pill neutral" data-filter="neutral">Neutral</button>
+          </div>
+        </div>
+        <div id="chart-top10" style="width:100%;height:400px;"></div>
+      </div>
+
+      <!-- table -->
+      <div class="card">
+        <div class="card-title">Full Results Table</div>
+        <div class="table-wrap">
+          <table id="results-table">
+            <thead>
+              <tr>
+                <th>Sentence</th>
+                <th>Aspect</th>
+                <th>Sentiment</th>
+              </tr>
+            </thead>
+            <tbody id="results-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /file-results -->
+  </div><!-- /tab-file -->
+
+</div><!-- /page -->
+
+<script>
+// ── Tab switching ──────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function showError(el, msg) { el.textContent = msg; el.classList.add('show'); }
+function hideError(el) { el.classList.remove('show'); }
+function setLoading(loaderEl, btnEl, on) {
+  loaderEl.classList.toggle('show', on);
+  btnEl.disabled = on;
+}
+
+// Light theme Plotly layout defaults
+const LAYOUT_BASE = {
+  paper_bgcolor: 'transparent',
+  plot_bgcolor:  'transparent',
+  font: { family: 'Lato', color: '#7a7060', size: 13 },
+  xaxis: { tickangle: -35, gridcolor: '#e0dbd2', linecolor: '#e0dbd2', tickfont: { size: 12 } },
+  yaxis: { gridcolor: '#e0dbd2', linecolor: '#e0dbd2', title: 'Count', tickfont: { size: 12 } },
+  margin: { t: 16, b: 110, l: 54, r: 20 },
+  legend: { font: { color: '#1e1a14', size: 13 }, bgcolor: 'transparent' },
+};
+const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
+
+// ── Single text ────────────────────────────────────────────────────────────
+const btnAnalyzeText = document.getElementById('btn-analyze-text');
+const loaderText = document.getElementById('loader-text');
+const errText = document.getElementById('err-text');
+const textResults = document.getElementById('text-results');
+const pillContainer = document.getElementById('aspect-pills');
+
+document.getElementById('btn-clear-text').addEventListener('click', () => {
+  document.getElementById('review-input').value = '';
+  textResults.classList.remove('show');
+  hideError(errText);
+});
+
+btnAnalyzeText.addEventListener('click', async () => {
+  const text = document.getElementById('review-input').value.trim();
+  if (!text) { showError(errText, 'Please enter a review first.'); return; }
+  hideError(errText);
+  setLoading(loaderText, btnAnalyzeText, true);
+  textResults.classList.remove('show');
+
+  try {
+    const res = await fetch('/analyze/text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Server error');
+
+    pillContainer.innerHTML = '';
+    if (!data.results || data.results.length === 0) {
+      pillContainer.innerHTML = '<span style="color:var(--muted);font-size:.95rem;">No aspects detected.</span>';
+    } else {
+      data.results.forEach((r, i) => {
+        const pill = document.createElement('div');
+        pill.className = `asp-pill ${r.sentiment}`;
+        pill.style.animationDelay = `${i * 60}ms`;
+        pill.innerHTML = `<span class="pill-dot"></span>${r.aspect} <span style="opacity:.5;font-size:.82rem;">${r.sentiment}</span>`;
+        pillContainer.appendChild(pill);
+      });
+    }
+    textResults.classList.add('show');
+  } catch (e) {
+    showError(errText, e.message);
+  } finally {
+    setLoading(loaderText, btnAnalyzeText, false);
+  }
+});
+
+// ── File upload ────────────────────────────────────────────────────────────
+const fileInput = document.getElementById('file-input');
+const dropZone = document.getElementById('drop-zone');
+const fileNameDisplay = document.getElementById('file-name-display');
+const csvOptions = document.getElementById('csv-options');
+const csvPreview = document.getElementById('csv-preview');
+const loaderFile = document.getElementById('loader-file');
+const errFile = document.getElementById('err-file');
+const btnAnalyzeFile = document.getElementById('btn-analyze-file');
+const fileResults = document.getElementById('file-results');
+
+let storedRecords = [];
+let globalData = null; // stores full API response for filter re-renders
+
+// drag-over style
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; handleFileChange(); }
+});
+fileInput.addEventListener('change', handleFileChange);
+
+function handleFileChange() {
+  const file = fileInput.files[0];
+  if (!file) return;
+  fileNameDisplay.textContent = '📄 ' + file.name;
+  const isCsv = file.name.toLowerCase().endsWith('.csv');
+  csvOptions.style.display = isCsv ? 'block' : 'none';
+  if (isCsv) previewCsv(file);
+}
+
+function previewCsv(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').slice(0, 4).join('\n');
+    csvPreview.textContent = lines;
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById('btn-clear-file').addEventListener('click', () => {
+  fileInput.value = '';
+  fileNameDisplay.textContent = '';
+  csvOptions.style.display = 'none';
+  fileResults.classList.remove('show');
+  hideError(errFile);
+  storedRecords = [];
+  globalData = null;
+});
+
+btnAnalyzeFile.addEventListener('click', async () => {
+  const file = fileInput.files[0];
+  if (!file) { showError(errFile, 'Please select a file first.'); return; }
+  hideError(errFile);
+  setLoading(loaderFile, btnAnalyzeFile, true);
+  fileResults.classList.remove('show');
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('has_header', document.getElementById('has-header').checked ? 'true' : 'false');
+  formData.append('column', document.getElementById('col-input').value.trim());
+
+  try {
+    const res = await fetch('/analyze/file', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Server error');
+
+    storedRecords = data.records;
+    globalData = data;
+    renderFileResults(data);
+    fileResults.classList.add('show');
+  } catch (e) {
+    showError(errFile, e.message);
+  } finally {
+    setLoading(loaderFile, btnAnalyzeFile, false);
+  }
+});
+
+// ── Top-10 filter pills ────────────────────────────────────────────────────
+document.getElementById('top10-filters').addEventListener('click', e => {
+  const pill = e.target.closest('.filter-pill');
+  if (!pill || !globalData) return;
+  document.querySelectorAll('#top10-filters .filter-pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  renderTop10Chart(globalData.records, pill.dataset.filter);
+});
+
+// ── Render helpers ─────────────────────────────────────────────────────────
+function renderFileResults(data) {
+  const pos = data.records.filter(r => r.sentiment === 'positive').length;
+  const neg = data.records.filter(r => r.sentiment === 'negative').length;
+  const neu = data.records.filter(r => r.sentiment === 'neutral').length;
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-box"><div class="stat-num">${data.total_sentences}</div><div class="stat-lbl">Sentences</div></div>
+    <div class="stat-box"><div class="stat-num">${data.total_aspects}</div><div class="stat-lbl">Aspect Mentions</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:var(--green)">${pos}</div><div class="stat-lbl">Positive</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:var(--red)">${neg}</div><div class="stat-lbl">Negative</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:var(--blue)">${neu}</div><div class="stat-lbl">Neutral</div></div>
+  `;
+
+  // ── Chart 1: Aspect by Sentiment (sorted desc by total) ──
+  const asd = data.aspect_sentiment_data;
+  // Compute totals per aspect and sort descending
+  const totals = asd.aspects.map((a, i) => ({
+    aspect: a,
+    pos: asd.positive[i],
+    neg: asd.negative[i],
+    neu: asd.neutral[i],
+    total: asd.positive[i] + asd.negative[i] + asd.neutral[i]
+  }));
+  totals.sort((a, b) => b.total - a.total);
+  const sortedAspects = totals.map(t => t.aspect);
+
+  Plotly.newPlot('chart-sentiment', [
+    { type:'bar', name:'Positive', x: sortedAspects, y: totals.map(t=>t.pos), marker:{ color:'#1e8a5e' } },
+    { type:'bar', name:'Negative', x: sortedAspects, y: totals.map(t=>t.neg), marker:{ color:'#c94040' } },
+    { type:'bar', name:'Neutral',  x: sortedAspects, y: totals.map(t=>t.neu), marker:{ color:'#3a6fb5' } },
+  ], {
+    ...LAYOUT_BASE,
+    barmode: 'group',
+  }, PLOTLY_CONFIG);
+
+  // ── Chart 2: Sentiment Distribution (donut) ──
+  Plotly.newPlot('chart-sentiment-dist', [{
+    type: 'pie',
+    labels: ['Positive', 'Negative', 'Neutral'],
+    values: [pos, neg, neu],
+    hole: 0.48,
+    marker: { colors: ['#1e8a5e', '#c94040', '#3a6fb5'] },
+    textinfo: 'label+percent',
+    textfont: { family: 'Lato', size: 14, color: '#1e1a14' },
+    hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>',
+  }], {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor:  'transparent',
+    font: { family: 'Lato', color: '#7a7060', size: 13 },
+    legend: { font: { color: '#1e1a14', size: 13 }, bgcolor: 'transparent', orientation: 'h', y: -0.1 },
+    margin: { t: 16, b: 60, l: 30, r: 30 },
+  }, PLOTLY_CONFIG);
+
+  // ── Chart 3: Top 10 (default: all) ──
+  // reset filter pills
+  document.querySelectorAll('#top10-filters .filter-pill').forEach(p => p.classList.remove('active'));
+  document.querySelector('#top10-filters .filter-pill.all').classList.add('active');
+  renderTop10Chart(data.records, 'all');
+
+  // ── Table ──
+  const tbody = document.getElementById('results-tbody');
+  tbody.innerHTML = '';
+  data.records.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="sentence-cell">${escHtml(r.sentence)}</td>
+      <td class="aspect-cell">${escHtml(r.aspect)}</td>
+      <td><span class="badge ${r.sentiment}">${r.sentiment}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderTop10Chart(records, filter) {
+  // Filter records by sentiment if not 'all'
+  const filtered = filter === 'all' ? records : records.filter(r => r.sentiment === filter);
+
+  // Count occurrences per aspect
+  const counts = {};
+  filtered.forEach(r => { counts[r.aspect] = (counts[r.aspect] || 0) + 1; });
+
+  // Sort descending, take top 10
+  const sorted = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  if (sorted.length === 0) {
+    Plotly.newPlot('chart-top10', [], { ...LAYOUT_BASE }, PLOTLY_CONFIG);
+    return;
+  }
+
+  const aspects = sorted.map(([a]) => a);
+  const countVals = sorted.map(([, c]) => c);
+
+  // Color by filter
+  const colorMap = { all: '#b5722a', positive: '#1e8a5e', negative: '#c94040', neutral: '#3a6fb5' };
+  const barColor = colorMap[filter] || '#b5722a';
+
+  Plotly.newPlot('chart-top10', [{
+    type: 'bar',
+    x: aspects,
+    y: countVals,
+    marker: {
+      color: countVals.map((_, i) => {
+        // gradient shade
+        const base = barColor;
+        return base;
+      }),
+      color: barColor,
+      opacity: countVals.map((v, i) => 1 - i * 0.06),
+    },
+    text: countVals.map(String),
+    textposition: 'outside',
+    textfont: { family: 'Lato', size: 13, color: '#1e1a14' },
+    hovertemplate: '<b>%{x}</b><br>Count: %{y}<extra></extra>',
+  }], {
+    ...LAYOUT_BASE,
+    yaxis: { ...LAYOUT_BASE.yaxis, title: filter === 'all' ? 'Total Mentions' : `${filter.charAt(0).toUpperCase()+filter.slice(1)} Mentions` },
+  }, PLOTLY_CONFIG);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Download ───────────────────────────────────────────────────────────────
+document.getElementById('btn-download').addEventListener('click', async () => {
+  if (!storedRecords.length) return;
+  const res = await fetch('/download/csv', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ records: storedRecords })
+  });
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'absa_results.csv';
+  a.click();
+});
+</script>
+</body>
+</html>
